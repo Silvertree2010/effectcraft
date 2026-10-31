@@ -385,11 +385,15 @@ pub const FILL_REACH: f64 = 8.0;
 fn nearest_fill(fill: &mut Image) {
     let (w, h) = (fill.width as usize, fill.height as usize);
     let mut seed: Vec<Option<u32>> = (0..w * h).map(|i| (fill.data[i][3] > 1e-3).then_some(i as u32)).collect();
+    if w == 0 || h == 0 {
+        return;
+    }
+    let mut next = seed.clone();
     let mut step = w.max(h).next_power_of_two() / 2;
     while step >= 1 {
-        let prev = seed.clone();
-        for y in 0..h {
-            for x in 0..w {
+        let prev = &seed;
+        next.par_chunks_mut(w).enumerate().for_each(|(y, row)| {
+            for (x, out) in row.iter_mut().enumerate() {
                 let i = y * w + x;
                 let mut best = prev[i];
                 let mut bd = best.map_or(i64::MAX, |s| d2(s as usize, x, y, w));
@@ -408,9 +412,10 @@ fn nearest_fill(fill: &mut Image) {
                         }
                     }
                 }
-                seed[i] = best;
+                *out = best;
             }
-        }
+        });
+        std::mem::swap(&mut seed, &mut next);
         step /= 2;
     }
     for i in 0..w * h {
